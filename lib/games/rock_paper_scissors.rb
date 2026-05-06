@@ -1,5 +1,6 @@
 module Games
   class RockPaperScissors
+    # Словарь фигур: кто кого побеждает и какой эмодзи использовать
     SHAPES = {
       'камень' => { beats: 'ножницы', emoji: '🪨' },
       'ножницы' => { beats: 'бумага', emoji: '✂️' },
@@ -14,6 +15,7 @@ module Games
     end
 
     def self.play(user_id, text, state, state_store)
+      # Проверка ответа после завершения раунда (Да/Нет)
       if state[:status] == :won_or_lost
         if text == 'да'
           return start(user_id, state_store)
@@ -43,6 +45,7 @@ module Games
         result_text += "Я победил! 🤖 Не расстраивайся."
       end
 
+      # Меняем статус, чтобы в следующий раз обработать выбор Да/Нет
       state[:status] = :won_or_lost
       { 
         text: "#{result_text}\n\nСыграем еще раз?", 
