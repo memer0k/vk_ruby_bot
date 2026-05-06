@@ -1,9 +1,10 @@
 require 'vkontakte_api'
 require 'dotenv/load'
+require 'json'
 
 # 1. Проверка окружения
 if ENV['VK_ACCESS_TOKEN'].nil? || ENV['VK_GROUP_ID'].nil?
-  puts "ОШИБКА: Проверь файл .env! Не найден токен или ID группы."
+  puts "ОШИБКА: Проверь файл .env!"
   exit
 end
 
@@ -13,77 +14,93 @@ VkontakteApi.configure do |config|
   config.api_version = '5.131'
 end
 
-# 3. Инициализация клиента
+# 3. Метод для создания клавиатуры (Две зеленые кнопки)
+def main_keyboard
+  {
+    one_time: false,
+    buttons: [
+      [
+        {
+          action: {
+            type: 'text',
+            label: 'Игры',
+            payload: { command: 'games' }.to_json
+          },
+          color: 'positive'
+        },
+        {
+          action: {
+            type: 'text',
+            label: 'Помощь',
+            payload: { command: 'help' }.to_json
+          },
+          color: 'positive'
+        }
+      ]
+    ]
+  }.to_json
+end
+
+# 4. Инициализация клиента
 vk = VkontakteApi::Client.new(ENV['VK_ACCESS_TOKEN'])
 
 puts "Подключаюсь к Long Poll..."
 
-# 4. Получаем данные для подключения (используем ['key'], чтобы избежать ошибок Ruby)
 begin
   lp_settings = vk.groups.getLongPollServer(group_id: ENV['VK_GROUP_ID'], access_token: ENV['VK_ACCESS_TOKEN'])
   server = lp_settings['server']
   key    = lp_settings['key']
   ts     = lp_settings['ts']
 rescue => e
-  puts "Ошибка при получении настроек Long Poll: #{e.message}"
+  puts "Ошибка подключения: #{e.message}"
   exit
 end
 
-puts "Бот запущен... Жду сообщений в ВК!"
+puts "Бот запущен в ветке develop... Текст помощи обновлен!"
 
-# 5. Главный цикл опроса сервера
+# 5. Главный цикл
 loop do
   begin
-    # Делаем запрос к Long Poll серверу
     connection = Faraday.new(url: server) do |faraday|
       faraday.adapter Faraday.default_adapter
       faraday.response :json
     end
 
-    response = connection.get('', {
-      act: 'a_check',
-      key: key,
-      ts:  ts,
-      wait: 25
-    }).body
+    response = connection.get('', { act: 'a_check', key: key, ts: ts, wait: 25 }).body
 
-    # Если сессия устарела (failed), обновляем ts и key
     if response['failed']
-      puts "Обновляю сессию Long Poll..."
       lp_settings = vk.groups.getLongPollServer(group_id: ENV['VK_GROUP_ID'], access_token: ENV['VK_ACCESS_TOKEN'])
       ts = lp_settings['ts']
       key = lp_settings['key']
       next
     end
 
-    # Обновляем временную метку
     ts = response['ts']
     updates = response['updates'] || []
 
-    # 6. Обработка событий
     updates.each do |update|
       if update['type'] == 'message_new'
-        # В версии 5.131 данные лежат в ['object']['message']
         message_data = update['object']['message']
         user_id = message_data['from_id']
-        text    = message_data['text'].to_s.downcase
+        text    = message_data['text'].to_s.strip.downcase
 
-        puts "Пришло сообщение: '#{text}' от ID: #{user_id}"
+        puts "Сообщение от #{user_id}: #{text}"
 
-        # Простая логика ответов
         reply = case text
-                when 'привет', 'начать'
-                  "Привет! Я твой игровой бот. Напиши 'игры', чтобы посмотреть список."
+                when 'привет', 'начать', 'start'
+                  "Привет! Я готов к работе. Используй кнопки ниже!"
                 when 'игры'
-                  "Сейчас доступны:\n1. Угадай число (скоро)\n2. Викторина (скоро)\n\nНапиши 'привет', если потерялся."
+                  "Раздел игр в разработке. Скоро запустим первую!"
+                when 'помощь'
+                  "Я игровой бот на Ruby. У меня есть три режима игры, и я написан в учебных целях!"
                 else
-                  "Я тебя не понял, но очень старался! Напиши 'привет' ъ"
+                  "Нажми на одну из зеленых кнопок ъ"
                 end
 
-        # Отправляем ответ
         vk.messages.send(
           user_id: user_id,
           message: reply,
+          keyboard: main_keyboard,
           random_id: rand(1..1_000_000),
           access_token: ENV['VK_ACCESS_TOKEN']
         )
@@ -91,10 +108,10 @@ loop do
     end
 
   rescue Interrupt
-    puts "\nБот выключен пользователем."
+    puts "\nБот остановлен."
     break
   rescue => e
-    puts "Произошла ошибка: #{e.message}. Переподключаюсь через 2 секунды..."
+    puts "Ошибка: #{e.message}"
     sleep 2
   end
 end
