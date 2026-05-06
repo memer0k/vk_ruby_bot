@@ -2,6 +2,7 @@ require 'vkontakte_api'
 require 'dotenv/load'
 require 'json'
 require_relative 'lib/games/guess_number'
+require_relative 'lib/games/rock_paper_scissors'
 
 VkontakteApi.configure do |config|
   config.adapter = :net_http
@@ -11,13 +12,18 @@ end
 vk = VkontakteApi::Client.new(ENV['VK_ACCESS_TOKEN'])
 $user_states = {}
 
+# --- КЛАВИАТУРЫ ---
+
 def main_kb
   {
     one_time: false,
-    buttons: [[
-      { action: { type: 'text', label: 'Игры' }, color: 'positive' },
-      { action: { type: 'text', label: 'Помощь' }, color: 'positive' }
-    ]]
+    buttons: [
+      [
+        { action: { type: 'text', label: 'Угадай число' }, color: 'positive' },
+        { action: { type: 'text', label: 'КНБ' }, color: 'positive' }
+      ],
+      [{ action: { type: 'text', label: 'Помощь' }, color: 'secondary' }]
+    ]
   }.to_json
 end
 
@@ -28,7 +34,20 @@ def game_kb
   }.to_json
 end
 
-# Новая клавиатура для выбора
+def rps_kb
+  {
+    one_time: false,
+    buttons: [
+      [
+        { action: { type: 'text', label: 'Камень' }, color: 'primary' },
+        { action: { type: 'text', label: 'Ножницы' }, color: 'primary' },
+        { action: { type: 'text', label: 'Бумага' }, color: 'primary' }
+      ],
+      [{ action: { type: 'text', label: 'Закончить игру' }, color: 'negative' }]
+    ]
+  }.to_json
+end
+
 def yes_no_kb
   {
     one_time: false,
@@ -38,6 +57,8 @@ def yes_no_kb
     ]]
   }.to_json
 end
+
+# --- ОТПРАВКА ---
 
 def send_msg(vk, user_id, params)
   vk.messages.send(
@@ -49,12 +70,14 @@ def send_msg(vk, user_id, params)
   )
 end
 
-puts "Подключаюсь к ВК (ветка develop)..."
+# --- LONG POLL ---
+
+puts "Подключаюсь к ВК..."
 begin
   lp = vk.groups.getLongPollServer(group_id: ENV['VK_GROUP_ID'])
   server, key, ts = lp['server'], lp['key'], lp['ts']
 rescue => e
-  puts "Ошибка: #{e.message}"; exit
+  puts "Ошибка подключения: #{e.message}"; exit
 end
 
 puts "Бот онлайн! 🚀"
@@ -82,36 +105,38 @@ loop do
         if text == 'закончить игру'
           $user_states.delete(user_id)
           send_msg(vk, user_id, text: "Игра окончена. Возвращаемся в меню! 🔙", kb: main_kb)
+        
         elsif state[:game] == :guess
           res = Games::GuessNumber.play(user_id, text, state, $user_states)
-          
-          # Выбираем клавиатуру в зависимости от результата
-          res[:kb] = if res[:ask_again]
-                       yes_no_kb
-                     elsif res[:finish]
-                       main_kb
-                     else
-                       game_kb
-                     end
-          
+          res[:kb] = res[:ask_again] ? yes_no_kb : (res[:finish] ? main_kb : game_kb)
+          send_msg(vk, user_id, res)
+        
+        elsif state[:game] == :rps
+          res = Games::RockPaperScissors.play(user_id, text, state, $user_states)
+          res[:kb] = res[:ask_again] ? yes_no_kb : (res[:finish] ? main_kb : rps_kb)
           send_msg(vk, user_id, res)
         end
+
       else
         case text
         when 'привет', 'начать'
-          send_msg(vk, user_id, text: "Привет! 👋 Давай поиграем?", kb: main_kb)
-        when 'игры'
+          send_msg(vk, user_id, text: "Привет! 👋 Во что хочешь поиграть?", kb: main_kb)
+        when 'угадай число'
           res = Games::GuessNumber.start(user_id, $user_states)
-          res[:kb] = game_kb
-          send_msg(vk, user_id, res)
+          send_msg(vk, user_id, res.merge(kb: game_kb))
+        when 'кнб'
+          res = Games::RockPaperScissors.start(user_id, $user_states)
+          send_msg(vk, user_id, res.merge(kb: rps_kb))
+        when 'помощь'
+          send_msg(vk, user_id, text: "Я игровой бот на Ruby. Выбирай игру кнопками ниже! 🤓", kb: main_kb)
         else
-          send_msg(vk, user_id, text: "Воспользуйся кнопками меню! ъ", kb: main_kb)
+          send_msg(vk, user_id, text: "Нажимай на кнопки в меню! ъ", kb: main_kb)
         end
       end
     end
   rescue Interrupt then break
   rescue => e
-    puts "Ошибка: #{e.message}"
+    puts "Ошибка цикла: #{e.message}"
     sleep 2
   end
 end
