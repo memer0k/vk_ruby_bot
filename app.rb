@@ -28,7 +28,17 @@ def game_kb
   }.to_json
 end
 
-# Чистый метод отправки сообщений без стикеров
+# Новая клавиатура для выбора
+def yes_no_kb
+  {
+    one_time: false,
+    buttons: [[
+      { action: { type: 'text', label: 'Да' }, color: 'positive' },
+      { action: { type: 'text', label: 'Нет' }, color: 'negative' }
+    ]]
+  }.to_json
+end
+
 def send_msg(vk, user_id, params)
   vk.messages.send(
     user_id: user_id,
@@ -47,7 +57,7 @@ rescue => e
   puts "Ошибка: #{e.message}"; exit
 end
 
-puts "Бот онлайн! Только текст и эмодзи 🚀"
+puts "Бот онлайн! 🚀"
 
 loop do
   begin
@@ -74,21 +84,28 @@ loop do
           send_msg(vk, user_id, text: "Игра окончена. Возвращаемся в меню! 🔙", kb: main_kb)
         elsif state[:game] == :guess
           res = Games::GuessNumber.play(user_id, text, state, $user_states)
-          res[:kb] = res[:finish] ? main_kb : game_kb
+          
+          # Выбираем клавиатуру в зависимости от результата
+          res[:kb] = if res[:ask_again]
+                       yes_no_kb
+                     elsif res[:finish]
+                       main_kb
+                     else
+                       game_kb
+                     end
+          
           send_msg(vk, user_id, res)
         end
       else
         case text
         when 'привет', 'начать'
           send_msg(vk, user_id, text: "Привет! 👋 Давай поиграем?", kb: main_kb)
-        when 'помощь'
-          send_msg(vk, user_id, text: "Я игровой бот на Ruby. У меня есть три режима игры, и я написан в учебных целях! 🤓", kb: main_kb)
         when 'игры'
           res = Games::GuessNumber.start(user_id, $user_states)
           res[:kb] = game_kb
           send_msg(vk, user_id, res)
         else
-          send_msg(vk, user_id, text: "Нажимай на зеленые кнопки! ъ", kb: main_kb)
+          send_msg(vk, user_id, text: "Воспользуйся кнопками меню! ъ", kb: main_kb)
         end
       end
     end
