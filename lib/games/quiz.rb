@@ -1,6 +1,5 @@
 module Games
   class Quiz
-    # База из 10 вопросов по программированию
     QUESTIONS = [
       { q: "Какой язык программирования использует символ '#' для однострочных комментариев?", opts: ["Python", "C++", "Ruby", "JavaScript"], a: "python" },
       { q: "Как называется процесс поиска и исправления ошибок в коде?", opts: ["Компиляция", "Дебаггинг", "Рефакторинг", "Интерпретация"], a: "дебаггинг" },
@@ -14,52 +13,56 @@ module Games
       { q: "Как называется репозиторий для хранения кода с системой контроля версий?", opts: ["Docker", "GitHub", "Nginx", "Visual Studio"], a: "github" }
     ].freeze
 
-    # Количество вопросов в одном раунде
     MAX_QUESTIONS = 5
 
     def self.start(user_id, state_store)
-      q_data = QUESTIONS.sample
+      # Перемешиваем индексы всех доступных вопросов
+      all_indices = (0...QUESTIONS.size).to_a.shuffle
+      # Берем первые 5 для текущего раунда
+      queue = all_indices.take(MAX_QUESTIONS)
+      
+      current_q_index = queue.shift
+      q_data = QUESTIONS[current_q_index]
+
       state_store[user_id] = { 
         game: :quiz, 
         status: :playing, 
         correct_answer: q_data[:a],
         score: 0,
         current_step: 1,
-        last_q: q_data[:q]
+        queue: queue # Сохраняем оставшиеся вопросы в очередь
       }
       
       {
-        text: "Начинаем викторину! 🧠\nВопрос 1 из #{MAX_QUESTIONS}:\n\n#{q_data[:q]}",
+        text: "Начинаем викторину! Вопросов не будет повторяться. 🧠\nВопрос 1 из #{MAX_QUESTIONS}:\n\n#{q_data[:q]}",
         options: q_data[:opts]
       }
     end
 
     def self.play(user_id, text, state, state_store)
-      # Если игрок уже закончил и выбирает Да/Нет
       if state[:status] == :finished
         if text == 'да'
           return start(user_id, state_store)
         else
           state_store.delete(user_id)
-          return { text: "Надеюсь, было познавательно! Возвращаемся в меню. 🔙", finish: true }
+          return { text: "До встречи! 🔙", finish: true }
         end
       end
 
       user_answer = text.strip.downcase
       is_correct = (user_answer == state[:correct_answer])
-      
       state[:score] += 1 if is_correct
       
-      # Проверка окончания раунда
-      if state[:current_step] >= MAX_QUESTIONS
+      # Если в очереди больше нет вопросов — финал
+      if state[:queue].empty?
         final_score = state[:score]
-        feedback = is_correct ? "Верно! ✅" : "Ошибка... ❌\nПравильный ответ был: #{state[:correct_answer].capitalize}"
+        feedback = is_correct ? "Верно! ✅" : "Ошибка... ❌\nПравильный ответ: #{state[:correct_answer].capitalize}"
         
         rank = case final_score
                when 5 then "Senior Developer! ⭐⭐⭐"
                when 3..4 then "Middle Developer! ⭐⭐"
                when 1..2 then "Junior Developer! ⭐"
-               else "Intern (надо подучить)! 📚"
+               else "Intern! 📚"
                end
 
         state[:status] = :finished
@@ -69,14 +72,14 @@ module Games
         }
       end
 
-      # Переход к следующему вопросу
-      state[:current_step] += 1
-      # Выбираем вопрос, которого не было только что
-      q_data = QUESTIONS.reject { |q| q[:q] == state[:last_q] }.sample
-      state[:correct_answer] = q_data[:a]
-      state[:last_q] = q_data[:q]
+      # Берем следующий вопрос из заранее перемешанной очереди
+      next_q_index = state[:queue].shift
+      q_data = QUESTIONS[next_q_index]
       
-      feedback = is_correct ? "Верно! ✅" : "Мимо... ❌\nПравильный ответ был: #{state[:correct_answer].capitalize}"
+      state[:current_step] += 1
+      state[:correct_answer] = q_data[:a]
+      
+      feedback = is_correct ? "Верно! ✅" : "Мимо... ❌\nПравильный ответ: #{state[:correct_answer].capitalize}"
       
       {
         text: "#{feedback}\n\nВопрос #{state[:current_step]} из #{MAX_QUESTIONS}:\n\n#{q_data[:q]}",
