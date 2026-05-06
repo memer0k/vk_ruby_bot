@@ -117,7 +117,7 @@ loop do
           res = Games::Quiz.start(user_id, $user_states)
           send_msg(vk, user_id, res.merge(kb: quiz_kb(res[:options])))
         else
-          send_msg(vk, user_id, text: "Воспользуйся кнопками меню! ъ", kb: main_kb)
+          send_msg(vk, user_id, text: "Воспользуйся кнопками меню!", kb: main_kb)
         end
       end
     end
