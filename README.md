@@ -1,0 +1,1 @@
+# vk_ruby_bot
