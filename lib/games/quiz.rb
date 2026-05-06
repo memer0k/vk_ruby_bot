@@ -16,9 +16,7 @@ module Games
     MAX_QUESTIONS = 5
 
     def self.start(user_id, state_store)
-      # Перемешиваем индексы всех доступных вопросов
       all_indices = (0...QUESTIONS.size).to_a.shuffle
-      # Берем первые 5 для текущего раунда
       queue = all_indices.take(MAX_QUESTIONS)
       
       current_q_index = queue.shift
@@ -27,14 +25,14 @@ module Games
       state_store[user_id] = { 
         game: :quiz, 
         status: :playing, 
-        correct_answer: q_data[:a],
+        correct_answer: q_data[:a], # Ответ на текущий (первый) вопрос
         score: 0,
         current_step: 1,
-        queue: queue # Сохраняем оставшиеся вопросы в очередь
+        queue: queue 
       }
       
       {
-        text: "Начинаем викторину! Вопросов не будет повторяться. 🧠\nВопрос 1 из #{MAX_QUESTIONS}:\n\n#{q_data[:q]}",
+        text: "Начинаем викторину! Повторов не будет. 🧠\nВопрос 1 из #{MAX_QUESTIONS}:\n\n#{q_data[:q]}",
         options: q_data[:opts]
       }
     end
@@ -50,14 +48,16 @@ module Games
       end
 
       user_answer = text.strip.downcase
+      # Сначала проверяем ответ на ТЕКУЩИЙ вопрос
       is_correct = (user_answer == state[:correct_answer])
       state[:score] += 1 if is_correct
       
-      # Если в очереди больше нет вопросов — финал
+      # Формируем фидбек (текст о том, прав пользователь или нет)
+      feedback = is_correct ? "Верно! ✅" : "Мимо... ❌\nПравильный ответ: #{state[:correct_answer].capitalize}"
+
+      # Проверка окончания раунда
       if state[:queue].empty?
         final_score = state[:score]
-        feedback = is_correct ? "Верно! ✅" : "Ошибка... ❌\nПравильный ответ: #{state[:correct_answer].capitalize}"
-        
         rank = case final_score
                when 5 then "Senior Developer! ⭐⭐⭐"
                when 3..4 then "Middle Developer! ⭐⭐"
@@ -72,14 +72,12 @@ module Games
         }
       end
 
-      # Берем следующий вопрос из заранее перемешанной очереди
+      # Только теперь берем из очереди СЛЕДУЮЩИЙ вопрос
       next_q_index = state[:queue].shift
       q_data = QUESTIONS[next_q_index]
       
       state[:current_step] += 1
-      state[:correct_answer] = q_data[:a]
-      
-      feedback = is_correct ? "Верно! ✅" : "Мимо... ❌\nПравильный ответ: #{state[:correct_answer].capitalize}"
+      state[:correct_answer] = q_data[:a] # Обновляем правильный ответ для следующего хода
       
       {
         text: "#{feedback}\n\nВопрос #{state[:current_step]} из #{MAX_QUESTIONS}:\n\n#{q_data[:q]}",
