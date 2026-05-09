@@ -11,7 +11,7 @@ VkontakteApi.configure do |config|
   config.api_version = '5.131'
 end
 
-vk = VkontakteApi::Client.new(ENV['VK_ACCESS_TOKEN'])
+$vk = VkontakteApi::Client.new(ENV['VK_ACCESS_TOKEN'])
 $user_states = {}
 
 def main_kb

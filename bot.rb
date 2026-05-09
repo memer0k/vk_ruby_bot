@@ -5,7 +5,7 @@ require 'faraday'
 
 puts "Бот подключается к ВК..."
 begin
-  lp = vk.groups.getLongPollServer(group_id: ENV['VK_GROUP_ID'])
+  lp = $vk.groups.getLongPollServer(group_id: ENV['VK_GROUP_ID'])
   server, key, ts = lp['server'], lp['key'], lp['ts']
 rescue => e
   puts "Ошибка API: #{e.message}"
@@ -27,7 +27,7 @@ loop do
       text = msg['text'].to_s.strip.downcase
       state = $user_states[user_id]
 
-      MessageHandler.process(vk, user_id, text, state)
+      MessageHandler.process($vk, user_id, text, state)
     end
   rescue => e
     puts "Ошибка: #{e.message}"
