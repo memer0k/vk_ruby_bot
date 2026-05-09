@@ -1,5 +1,5 @@
 # spec/games/rock_paper_scissors_spec.rb
-require 'spec_helper'
+require_relative '../spec_helper'
 
 RSpec.describe Games::RockPaperScissors do
   let(:user_id) { 123456 }
@@ -33,15 +33,36 @@ RSpec.describe Games::RockPaperScissors do
     end
     
     it 'объявляет победителя (камень побеждает ножницы)' do
-      allow(Games::RockPaperScissors::SHAPES.keys).to receive(:sample).and_return('ножницы')
+      allow_any_instance_of(Array).to receive(:sample).and_return('ножницы')
       result = described_class.play(user_id, 'камень', state, state_store)
       expect(result[:text]).to include('Ты победил!')
     end
     
     it 'обрабатывает ничью' do
-      allow(Games::RockPaperScissors::SHAPES.keys).to receive(:sample).and_return('камень')
+      allow_any_instance_of(Array).to receive(:sample).and_return('камень')
       result = described_class.play(user_id, 'камень', state, state_store)
       expect(result[:text]).to include('Ничья')
+    end
+    
+    it 'правильно определяет победу бота' do
+      allow_any_instance_of(Array).to receive(:sample).and_return('бумага')
+      result = described_class.play(user_id, 'камень', state, state_store)
+      expect(result[:text]).to include('Я победил!')
+    end
+    
+    it 'перезапускает игру после раунда при ответе "да"' do
+      state[:status] = :won_or_lost
+      result = described_class.play(user_id, 'да', state, state_store)
+      expect(state_store[user_id][:status]).to eq(:playing)
+      expect(result[:text]).to include('Выбирай свою фигуру')
+    end
+    
+    it 'завершает игру при ответе "нет" после раунда' do
+      state[:status] = :won_or_lost
+      result = described_class.play(user_id, 'нет', state, state_store)
+      expect(state_store[user_id]).to be_nil
+      expect(result[:text]).to include('Возвращаемся в меню')
+      expect(result[:finish]).to be true
     end
   end
 end
